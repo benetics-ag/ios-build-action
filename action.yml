@@ -118,6 +118,13 @@ inputs:
     description: 'Custom Keychain Name'
     required: false
     default: "ios-build.keychain"
+  keychain-password:
+    description: 'Keychain password'
+    required: false
+  update-default-keychain:
+    description: "Set the created keychain as the default"
+    required: false
+    default: "false"
 runs:
   using: "node20"
   main: "dist/index.js"
