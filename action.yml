@@ -124,7 +124,7 @@ inputs:
   update-default-keychain:
     description: "Set the created keychain as the default"
     required: false
-    default: "false"
+    default: true
 runs:
   using: "node20"
   main: "dist/index.js"
