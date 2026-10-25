@@ -6,14 +6,14 @@ platform :ios do
     decode_file
 
     keychain_password = !ENV['KEYCHAIN_PASSWORD'].empty? ? ENV['KEYCHAIN_PASSWORD'] : SecureRandom.uuid
-    keychain_name = nil
-    if !ENV['CUSTOM_KEYCHAIN_NAME'].empty?
-      keychain_name = ENV['CUSTOM_KEYCHAIN_NAME']
-    else
-      keychain_name = 'ios-build.keychain'
-    end
+    keychain_name = build_keychain_name
 
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
+
+    # A run that was interrupted before `delete_keychain` leaves its keychain
+    # behind. `create_keychain` would skip creation and fail to unlock it with
+    # this run's password, so delete it first.
+    delete_keychain_if_present(keychain_name)
 
     create_keychain(
       name: keychain_name,
@@ -221,6 +221,12 @@ platform :ios do
     delete_keychain(name: keychain_name)
   end
 
+  # A failed lane never reaches `delete_keychain`; clean up here so the
+  # keychain isn't left behind for the next run.
+  error do |lane, exception|
+    delete_keychain_if_present(build_keychain_name)
+  end
+
   # https://github.com/CocoaPods/Xcodeproj/issues/505#issuecomment-584699008
   # Augments config.resolve_build_setting from xcproject
   # to continue expanding build settings and evaluate modifiers
@@ -300,5 +306,27 @@ platform :ios do
         1
       ) { |profile, index| @profiles.push(profile) }
     end
+  end
+
+  def build_keychain_name
+    if !ENV['CUSTOM_KEYCHAIN_NAME'].empty?
+      ENV['CUSTOM_KEYCHAIN_NAME']
+    else
+      'ios-build.keychain'
+    end
+  end
+
+  # `delete_keychain` restores the default keychain this run replaced, but
+  # only once `create_keychain` has recorded it. A keychain left behind by an
+  # earlier run may still be the default with that original lost, so fall back
+  # to the login keychain rather than leave the default pointing at nothing.
+  def delete_keychain_if_present(keychain_name)
+    keychain_path = Fastlane::Actions::CreateKeychainAction.resolved_keychain_path("~/Library/Keychains/#{keychain_name}")
+    return unless keychain_path
+
+    if sh("security", "default-keychain", log: false).strip.delete('"') == keychain_path
+      sh("security", "default-keychain", "-s", File.expand_path("~/Library/Keychains/login.keychain-db"))
+    end
+    delete_keychain(keychain_path: keychain_path)
   end
 end
